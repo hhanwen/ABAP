@@ -1,0 +1,137 @@
+*&---------------------------------------------------------------------*
+*& Report ZRFCLOG
+*&---------------------------------------------------------------------*
+*& 程序描述：显示RFC日志
+*& 创建日期：2017.08
+*& 作者： HUANGHANWEN
+*&---------------------------------------------------------------------*
+report zrfclog no standard page heading.
+tables: zlogdata.
+
+*&=====================================================================*
+*&      初始化
+*&=====================================================================*
+initialization.
+  data(go_controller) = new zcl_rfclog( ). "RFC LOG
+
+*&=====================================================================*
+*&      选择屏幕
+*&=====================================================================*
+  " 选择功能
+  selection-screen:begin of block block_1 with frame title text-t01.
+  parameters:
+    p_check radiobutton group g1 default 'X' user-command u1,
+    p_clear radiobutton group g1.
+  selection-screen end of block block_1.
+
+  " 输入条件
+  selection-screen:begin of block block_2 with frame title text-t02.
+  select-options:s_area for zlogdata-area .
+  select-options:s_name for zlogdata-name .
+  select-options:s_erdat for zlogdata-erdat modif id m1.
+  select-options:s_zeit for zlogdata-zeit modif id m1.
+  select-options:s_ernam for zlogdata-ernam modif id m1.
+  selection-screen end of block block_2.
+
+  " 删除日志时间
+  selection-screen:begin of block block_3 with frame title text-t02.
+  parameters:
+    p_clear1 radiobutton group g2 default 'X' user-command u2 modif id m2,
+    p_clear2 radiobutton group g2 modif id m2,
+    p_clear3 radiobutton group g2 modif id m2,
+    p_clear4 radiobutton group g2 modif id m2.
+  selection-screen end of block block_3.
+
+  " 附加条件
+  selection-screen:begin of block block_4 with frame title text-t03.
+  parameters:
+    p_error as checkbox  user-command u3 modif id m1.
+  selection-screen end of block block_4.
+
+*&=====================================================================*
+*&      选择屏幕动态显示
+*&=====================================================================*
+at selection-screen output.
+  loop at screen.
+    case 'X'.
+      when p_check.
+        if screen-group1 = 'M1'.
+          screen-active = 1.
+        elseif screen-group1 = 'M2'.
+          screen-active = 0.
+        endif.
+      when p_clear.
+        if screen-group1 = 'M1'.
+          screen-active = 0.
+        elseif screen-group1 = 'M2'.
+          screen-active = 1.
+        endif.
+    endcase.
+    modify screen.
+  endloop.
+  if s_erdat[] is initial.
+    append initial line to s_erdat assigning field-symbol(<erdat>).
+    <erdat>-sign = 'I'.
+    <erdat>-option = 'EQ'.
+    <erdat>-low = sy-datum .
+    <erdat>-high = sy-datum.
+  endif.
+
+*&=====================================================================*
+*&      选择屏幕事件
+*&=====================================================================*
+at selection-screen on value-request for s_area-low.
+  zcl_rfclog=>f4_function_group( ).
+
+at selection-screen on value-request for s_name-low.
+  zcl_rfclog=>f4_function_module( ).
+
+at selection-screen.
+  go_controller->get_para_from_selscreen( ).
+
+*&=====================================================================*
+*&      开始执行
+*&=====================================================================*
+start-of-selection.
+  case 'X'.
+    when p_check.
+      if go_controller->get_log_data( ) = abap_true.
+        call screen 5000.
+      else.
+        message '没有符合条件的数据' type 'S'.
+      endif.
+    when p_clear.
+      go_controller->delete_log_data( ).
+  endcase.
+
+*&=====================================================================*
+*&      PBO MODULE
+*&=====================================================================*
+module pbo output.
+  set pf-status 'STATUS'.
+  set titlebar 'TITLE' with 'RFC调用日志'.
+  go_controller->show_alv(  ).
+endmodule.
+
+*&=====================================================================*
+*&      PAI MODULE
+*&=====================================================================*
+module pai input.
+  case sy-ucomm.
+    when 'EXIT' or 'CANC'.
+      leave program.
+    when 'BACK'.
+      leave to screen 0.
+    when 'REFRESH'.
+      go_controller->get_log_data( ).
+      go_controller->refresh_alv( ).
+    when 'DETAIL'.
+      go_controller->show_log_detail( ).
+    when 'SE37'.
+      go_controller->show_log_se37( ).
+    when 'JSON'.
+      go_controller->show_log_json( ).
+    when 'XML'.
+      go_controller->show_log_xml( ).
+  endcase.
+endmodule.
